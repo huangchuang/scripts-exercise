@@ -275,6 +275,8 @@ sub WriteOutputBody(file, testName)
 
 	Set StartFail = New RegExp
 	StartFail.Pattern = "(^\s*1\))"								'Matches - 1) This test has failed
+	Set StartFail2 = New RegExp
+	StartFail2.Pattern = "(\!\!\!FAILURES\!\!\!)"
 
 	Set EndFail = New RegExp
 	EndFail.Pattern = "(.*)Total(\s+\d+)|(\w+::\w+\s+-\s+\w+)"	'Matches - Total 123 OR Class::Method - fail
@@ -303,7 +305,11 @@ sub WriteOutputBody(file, testName)
 
 	Set OKRe = New RegExp
 	OKRe.Pattern = "(OK \((\d+) tests\))"
+	Set AsyncRe = New RegExp
+	AsyncRe.Pattern = "(Run\:  \d+   Failures\: (\d+)   Random\: \d+   Expected\: \d+   Errors\: \d+)"
 
+Set testRe = New RegExp
+	testRe.Pattern = "(Run\:.*)"
 
 	' For log files
 	failedLines = ""
@@ -318,7 +324,8 @@ sub WriteOutputBody(file, testName)
 	blnFail = False
 	blnParseFail = False
 	bNUnitTest = False
-	eTestArea = GetTestArea(TestName)
+	testNameNew = Split(TestName, "-", -1, 1)
+	eTestArea = GetTestArea(testNameNew(UBound(testNameNew)))
 
 	'This bit works out how many tests have failed or passed, all unit tests except UnitTestCS has same format so
 	filename = wFSO.GetFileName(file)
@@ -396,8 +403,11 @@ sub WriteOutputBody(file, testName)
 				sFail = Matches(0).SubMatches(3)		'Errors:(.*)
 
 			    lngTotal = CInt(sTotal)
-					lngFail = CInt(sFail)
-					lngPass = CInt(sPass)
+				lngFail = CInt(sFail)
+				lngPass = CInt(sPass)
+				If lngFail > 0 Then
+					blnFail = true
+				End If
 			End If
 		End If
 		
@@ -455,6 +465,9 @@ sub WriteOutputBody(file, testName)
 		Elseif StartFail.test(line) = True Then
 			blnFail = True
 			failedLines = failedLines + vbNewLine
+		Elseif StartFail2.test(line) = True Then
+			blnFail = True
+			failedLines = failedLines + vbNewLine
 		End If
 
 		' determine whether to print out error log
@@ -463,7 +476,9 @@ sub WriteOutputBody(file, testName)
 		Elseif StartFail.test(line) = True Then
 			blnFail = True
 			failedLines = failedLines + vbNewLine
-					
+		Elseif StartFail2.test(line) = True Then
+			blnFail = True
+			failedLines = failedLines + vbNewLine
 		End If
 
 		' Write to logs
@@ -477,10 +492,13 @@ sub WriteOutputBody(file, testName)
 		Elseif SuccessRe.Test(line) = True Then	' increase pass counter
 			lngPass = lngPass + 1
 			lngTotal = lngTotal + 1
+		Elseif AsyncRe.Test(line) = True Then
+			Set Matches = AsyncRe.Execute(line)
+			lngFail = lngFail + CInt(Matches(0).SubMatches(1))
 		Elseif OKRe.Test(line) = True Then
 			Set Matches = OKRe.Execute(line)
 			lngTotal = Matches(0).SubMatches(1)
-			LngPass = Matches(0).SubMatches(1)
+			lngPass = lngTotal - lngFail
 		End If
 
 	Loop
@@ -710,7 +728,10 @@ Function GetTestArea(test)
 	   test = "Other" Or _
 	   test = "Search" Or _
 	   test = "UnitTestCS" Or _
-	   test = "PainterUnitTest" Or _
+	   test = "Painter" Or _
+	   test = "Converter" Or _
+   	   test = "OS2200Builder" Or _
+   	   test = "VersionControl" Or _
 	   test = "XMI" Or _ 
 	   test = "XMIExporter" Or _
 	   test = "XMIImporter" Or _
